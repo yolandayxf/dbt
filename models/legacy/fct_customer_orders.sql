@@ -1,4 +1,3 @@
-
 with
 
 -- import cte
@@ -32,7 +31,7 @@ with
             customers.last_name as customer_last_name
         from orders left join payments
             on orders.id = payments.order_id
-        left join customers c on orders.user_id = customers.id
+        left join customers on orders.user_id = customers.id
     ),
 
     customer_orders as (
@@ -41,7 +40,7 @@ with
             min(order_date) as first_order_date,
             max(order_date) as most_recent_order_date,
             count(orders.id) as number_of_orders
-        from customers c
+        from customers
         left join orders on orders.user_id = customers.id
         group by 1
     ),
