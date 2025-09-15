@@ -61,3 +61,4 @@ with
 -- simple select
 select *
 from final
+order by order_id
