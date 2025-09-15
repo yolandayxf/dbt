@@ -29,51 +29,33 @@ with
             payments.payment_finalized_date,
             customers.first_name as customer_first_name,
             customers.last_name as customer_last_name
-        from orders left join payments
-            on orders.id = payments.order_id
+        from orders 
+        left join payments on orders.id = payments.order_id
         left join customers on orders.user_id = customers.id
-    ),
-
-    customer_orders as (
-        select
-            customers.id as customer_id,
-            min(order_date) as first_order_date,
-            max(order_date) as most_recent_order_date,
-            count(orders.id) as number_of_orders
-        from customers
-        left join orders on orders.user_id = customers.id
-        group by 1
-    ),
-
-    clv_by_order as (
-        select p1.order_id, sum(p2.total_amount_paid) as clv_bad
-        from paid_orders p1
-        left join
-        paid_orders p2
-        on p1.customer_id = p2.customer_id
-        and p1.order_id >= p2.order_id
-        group by 1
-        order by p1.order_id
     ),
 
     -- final cte
 
     final as (
         select
-            paid_orders.*,
-            row_number() over (order by paid_orders.order_id) as transaction_seq,
-            row_number() over (
-                partition by paid_orders.customer_id order by paid_orders.order_id
-            ) as customer_sales_seq,
+            order_id,
+            customer_id,
+            order_placed_at,
+            order_status,
+            total_amount_paid,
+            payment_finalized_date,
+            customer_first_name,
+            customer_last_name,
+            row_number() over (order by order_id) as transaction_seq,
+            row_number() over (partition by customer_id order by order_id) as customer_sales_seq,
             case
-                when customer_orders.first_order_date = paid_orders.order_placed_at then 'new' else 'return'
-            end as nvsr,
-            clv_by_order.clv_bad as customer_lifetime_value,
-            customer_orders.first_order_date as fdos
+                when (
+                    rank() over (partition by customer_id order by order_placed_at, order_id)=1
+                    )
+                then 'new' else 'return' end as nvsr,
+            sum(total_amount_paid) over (partition by customer_id order by order_placed_at) as customer_lifetime_value,
+            first_value(order_placed_at) over (partition by customer_id order by order_placed_at) as fdos
         from paid_orders
-        left join customer_orders on paid_orders.customer_id = customer_orders.customer_id
-        left outer join clv_by_order on clv_by_order.order_id = paid_orders.order_id
-        order by paid_orders.order_id
     )
 
 -- simple select
