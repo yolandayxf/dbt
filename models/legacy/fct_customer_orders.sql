@@ -45,35 +45,35 @@ with
         group by 1
     ),
 
+    clv_by_order as (
+        select p1.order_id, sum(p2.total_amount_paid) as clv_bad
+        from paid_orders p1
+        left join
+        paid_orders p2
+        on p1.customer_id = p2.customer_id
+        and p1.order_id >= p2.order_id
+        group by 1
+        order by p1.order_id
+    ),
+
     -- final cte
 
     final as (
         select
-            p.*,
-            row_number() over (order by p.order_id) as transaction_seq,
+            paid_orders.*,
+            row_number() over (order by paid_orders.order_id) as transaction_seq,
             row_number() over (
-                partition by customer_id order by p.order_id
+                partition by paid_orders.customer_id order by paid_orders.order_id
             ) as customer_sales_seq,
             case
-                when c.first_order_date = p.order_placed_at then 'new' else 'return'
+                when customer_orders.first_order_date = paid_orders.order_placed_at then 'new' else 'return'
             end as nvsr,
-            x.clv_bad as customer_lifetime_value,
-            c.first_order_date as fdos
-        from paid_orders p
-        left join customer_orders as c using (customer_id)
-        left outer join
-            (
-                select p.order_id, sum(t2.total_amount_paid) as clv_bad
-                from paid_orders p
-                left join
-                    paid_orders t2
-                    on p.customer_id = t2.customer_id
-                    and p.order_id >= t2.order_id
-                group by 1
-                order by p.order_id
-            ) x
-            on x.order_id = p.order_id
-        order by order_id
+            clv_by_order.clv_bad as customer_lifetime_value,
+            customer_orders.first_order_date as fdos
+        from paid_orders
+        left join customer_orders on paid_orders.customer_id = customer_orders.customer_id
+        left outer join clv_by_order on clv_by_order.order_id = paid_orders.order_id
+        order by paid_orders.order_id
     )
 
 -- simple select
